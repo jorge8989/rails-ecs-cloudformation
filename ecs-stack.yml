@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Memory: 512
+      Cpu: 512
+      ContainerDefinitions:
+        - Name: ReservasWebContainer
+          Image: 'jorgelabs/reservas_app:latest'
+          Command:
+            - 'bundle'
+            - 'exec'
+            - 'puma'
+            - '-C'
+            - 'config/puma.rb'
+          PortMappings:
+            - ContainerPort: 3000
+              HostPort: 3000
+          Environment:
+            - Name: 'DB_HOST'
+              Value: !ImportValue PostgresEndpoint
+      RequiresCompatibilities:
+        - EC2
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ReservasECSCluster
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      Name: 'ReservasTargetGroup'
+      VpcId: 'vpc-08c85fa9a0190e243'
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+    DependsOn: ApplicationELB
+  ApplicationELB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: ReservasELB
+      IpAddressType: ipv4
+      Scheme: 'internet-facing'
+      SecurityGroups:
+        - 'sg-0cf1705207b12c3fd'
+      Subnets:
+        - 'subnet-0f22845cc06b2b7e6'
+        - 'subnet-0b7373f6868d20edb'
+        - 'subnet-05852ce336604871f'
+      Type: application
+  HTTPListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ApplicationELB
+      Port: 80
+      Protocol: "HTTP"
+      DefaultActions: 
+        - TargetGroupArn: !Ref TargetGroup
+          Type: "forward"
+  EcsInstanceLc:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: 'ami-03dbf0c122cb6cf1d'
+      InstanceType: 't2.micro'
+      IamInstanceProfile: arn:aws:iam::305296878851:instance-profile/ecsInstanceRole
+      KeyName: 'reservas-key-pair'
+      SecurityGroups:
+        - 'sg-0cf1705207b12c3fd'
+      BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp2
+      UserData:
+        "Fn::Base64": !Sub |
+          #!/bin/bash
+          echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+          echo ECS_BACKEND_HOST= >> /etc/ecs/ecs.config
+
+  EcsInstanceAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: 'ReservasASG'
+      VPCZoneIdentifier:
+        - 'subnet-0f22845cc06b2b7e6'
+        - 'subnet-0b7373f6868d20edb'
+        - 'subnet-05852ce336604871f'
+      LaunchConfigurationName: !Ref EcsInstanceLc
+      MinSize: '1'
+      MaxSize: '1'
+      DesiredCapacity: '1'
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref ECSCluster
+      Role: 'arn:aws:iam::305296878851:role/ecsServiceRole'
+      TaskDefinition: !Ref ECSTaskDefinition
+      LoadBalancers:
+        - TargetGroupArn: !Ref TargetGroup
+          ContainerPort: 3000
+          ContainerName: ReservasWebContainer
+      LaunchType: EC2
+      SchedulingStrategy: REPLICA
+      ServiceName: ReservasECSService
+      DesiredCount: 1
+    DependsOn: HTTPListener
+Outputs:
+  ECSCluster:
+    Value: !Ref ECSCluster

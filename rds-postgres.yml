@@ -1,0 +1,25 @@
+---
+Parameters:
+  DBUsername:
+    Description: PosgreSQL DB Username
+    Type: 'String'
+  DBPassword:
+    Description: PostgreSQL DB Password
+    Type: 'String'
+Resources:
+  RDSPostgres:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t3.micro
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+Outputs:
+  EndpointAddress:
+    Value:
+      !GetAtt
+        - RDSPostgres
+        - Endpoint.Address
+    Export:
+      Name: PostgresEndpoint
