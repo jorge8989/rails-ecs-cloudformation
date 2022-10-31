@@ -62,7 +62,7 @@ Resources:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
       ImageId: 'ami-03dbf0c122cb6cf1d'
-      InstanceType: 't2.micro'
+      InstanceType: 't3.small'
       IamInstanceProfile: arn:aws:iam::305296878851:instance-profile/ecsInstanceRole
       KeyName: 'reservas-key-pair'
       SecurityGroups:
